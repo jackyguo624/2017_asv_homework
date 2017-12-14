@@ -14,31 +14,28 @@ class CNN(nn.Module):
 
         self.inputdim = inputdim
         self.outputdim = outputdim
-        self.timedim = kwargs.get('timedim',5)
-        self.channel = kwargs.get('channel',3)
+        self.timedim = kwargs.get('timedim',0)
+        self.channel = kwargs.get('channel',1)
         layers = []
-        conv99 = nn.Conv2d(3, 128, kernel_size=(9,9))
-        conv43 = nn.Conv2d(128, 256, kernel_size=(3,4))
+        conv0 = nn.Conv2d(self.channel, 128, kernel_size=(3,5), padding=(1, 0), stride=(1, 2))
+        conv1 = nn.Conv2d(128,256, kernel_size=(2,3), stride=(1, 2))
+        conv2 = nn.Conv2d(256,256,kernel_size=(2,2),stride=(2,2))
 
-        layers += [conv99, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
-        layers += [nn.MaxPool2d(kernel_size=(9, 9), stride=(1, 3))]
-        layers += [conv43, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+        layers += [conv0, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
+        layers += [nn.MaxPool2d(kernel_size=(2, 3), stride=(1, 2))]
+        layers += [conv1, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+        layers += [nn.MaxPool2d(kernel_size=(3, 3), stride=(2, 2))]
+        layers += [conv2, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
 
         self.features = nn.Sequential(*layers)
         self.classifier = nn.Sequential(
-            nn.Linear(5*5*256,2048),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(2048,2048),
+            nn.Linear(4*5*256, 1024),
             nn.ReLU(),
             nn.Dropout(),
-            nn.Linear(2048,2048),
+            nn.Linear(1024, 1024),
             nn.ReLU(),
             nn.Dropout(),
-            nn.Linear(2048, 2048),
-            nn.ReLU(),
-            nn.Dropout(),
-            nn.Linear(2048, 512),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Dropout(),
             nn.Linear(512, self.outputdim),
@@ -46,11 +43,15 @@ class CNN(nn.Module):
         self._initialize_weights()
 
     def forward(self, x):
-        x = self.rearrange_cnn(x)
+        x = self.reshape_cnn(x)
         x = self.features(x)
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
+
+    def reshape_cnn(self, x):
+        bs, ht, wid = x.size()
+        return x.view(bs, self.channel, ht, wid)
 
     def rearrange_cnn(self, v):
         bs, inputdim = v.size()

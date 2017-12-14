@@ -10,16 +10,19 @@ class DNN(nn.Module):
         self.outputdim = outputdim
         self.hiddim = 4096
         self.classifier = nn.Sequential(
-            nn.Linear(self.inputdim,self.hiddim),
+            nn.Linear(self.inputdim, self.hiddim),
             nn.ReLU(),
-            #nn.Dropout(),
-            nn.Linear(self.hiddim,self.hiddim),
-            nn.ReLU(),
-            #nn.Dropout(),
+            nn.Dropout(),
             nn.Linear(self.hiddim, self.hiddim),
             nn.ReLU(),
-            #nn.Dropout(),
-            nn.Linear(self.hiddim, self.outputdim),
+            nn.Dropout(),
+            nn.Linear(self.hiddim, self.hiddim),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(self.hiddim, 64),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(64, self.outputdim),
         )
         self._initialize_weights()
 
