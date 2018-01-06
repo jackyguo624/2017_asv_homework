@@ -5,27 +5,19 @@ from torch.autograd import Variable
 import torch
 
 __all__ = [
-    'cnn'
+    'cnn', 'cnn_fbank', 'cnn_cqcc'
 ]
 
+
 class CNN(nn.Module):
-    def __init__(self, inputdim, outputdim, **kwargs):
+    def __init__(self, name, inputdim, outputdim, **kwargs):
         super(CNN, self).__init__()
 
         self.inputdim = inputdim
         self.outputdim = outputdim
-        self.timedim = kwargs.get('timedim',0)
-        self.channel = kwargs.get('channel',1)
-        layers = []
-        conv0 = nn.Conv2d(self.channel, 128, kernel_size=(3,5), padding=(1, 0), stride=(1, 2))
-        conv1 = nn.Conv2d(128,256, kernel_size=(2,3), stride=(1, 2))
-        conv2 = nn.Conv2d(256,256,kernel_size=(2,2),stride=(2,2))
-
-        layers += [conv0, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
-        layers += [nn.MaxPool2d(kernel_size=(2, 3), stride=(1, 2))]
-        layers += [conv1, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
-        layers += [nn.MaxPool2d(kernel_size=(3, 3), stride=(2, 2))]
-        layers += [conv2, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+        self.timedim = kwargs.get('timedim', 0)
+        self.channel = kwargs.get('channel', 1)
+        layers = self.make_cnn_layer(name)
 
         self.features = nn.Sequential(*layers)
         self.classifier = nn.Sequential(
@@ -74,9 +66,57 @@ class CNN(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+    def make_cnn_layer(self, name):
+        layers = []
+        if name is "cqcc":
+            conv0 = nn.Conv2d(self.channel, 128, kernel_size=(3,5), padding=(1, 0), stride=(1, 2))
+            conv1 = nn.Conv2d(128,256, kernel_size=(2,3), stride=(1, 2))
+            conv2 = nn.Conv2d(256,256,kernel_size=(2,2),stride=(2,2))
 
-def cnn(inputdim, outputdim,**kwargs):
-    model = CNN(inputdim,outputdim,**kwargs)
+            layers += [conv0, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(2, 3), stride=(1, 2))]
+            layers += [conv1, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(3, 3), stride=(2, 2))]
+            layers += [conv2, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+        elif name is "fbank":
+            conv0 = nn.Conv2d(self.channel, 128, kernel_size=(3,5), padding=(0, 0), stride=(1, 2))
+            conv1 = nn.Conv2d(128,256, kernel_size=(2,3), stride=(2, 2))
+            conv2 = nn.Conv2d(256,256,kernel_size=(2,2),stride=(2,2))
+
+            layers += [conv0, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(2, 3), stride=(1, 2))]
+            layers += [conv1, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(3, 3), stride=(2, 2))]
+            layers += [conv2, nn.BatchNorm2d(256), nn.ReLU(inplace=True)] 
+        elif name is "mfcc":
+            conv0 = nn.Conv2d(self.channel, 128, kernel_size=(2,5), padding=(1, 0), stride=(1, 2))
+            conv1 = nn.Conv2d(128,256, kernel_size=(2,3), padding=(1, 0), stride=(1, 2))
+            conv2 = nn.Conv2d(256,256,kernel_size=(2,2),stride=(2,2))
+
+            layers += [conv0, nn.BatchNorm2d(128), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(2, 3), padding=(0, 0), stride=(1, 2))]
+            layers += [conv1, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+            layers += [nn.MaxPool2d(kernel_size=(2, 3), padding=(1, 0), stride=(2, 2))]
+            layers += [conv2, nn.BatchNorm2d(256), nn.ReLU(inplace=True)]
+        return layers
+
+    
+def cnn(inputdim, outputdim, **kwargs):
+    model = CNN("cqcc", inputdim, outputdim, **kwargs)
+    return model
+
+def cnn_cqcc(inputdim, outputdim, **kwargs):
+    model = CNN("cqcc", inputdim, outputdim, **kwargs)
+    return model
+
+
+def cnn_fbank(inputdim, outputdim, **kwargs):
+    model = CNN("fbank", inputdim, outputdim, **kwargs)
+    return model
+
+
+def cnn_mfcc(inputdim, outputdim, **kwargs):
+    model = CNN("mfcc", inputdim, outputdim, **kwargs)
     return model
 
 if __name__ == '__main__':

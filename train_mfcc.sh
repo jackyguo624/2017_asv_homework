@@ -8,7 +8,7 @@ TRAINDATA=/home/slhome/jqg01/work-home/workspace/asvspoof2017/mfcc/train/mfcc.sc
 CVDATA=/home/slhome/jqg01/work-home/workspace/asvspoof2017/mfcc/dev/mfcc.scp
 
 
-GPUS=`nvidia-smi|awk 'BEGIN{n=0}{if(NF==15){ print n,$11-$9;n=n+1  }}'| sort -k 2 -r|awk '{print $1}'| head -n 2`
+GPUS=`nvidia-smi|awk 'BEGIN{n=0}{if(NF==15){ print n,$11-$9;n=n+1  }}'| sort -k 2 -n -r|awk '{print $1nvidia-smi|awk 'BEGIN{n=0}{if(NF==15){ print n,$11-$9;n=n+1  }}'| sort -k 2 -r|awk '{print $21}'| head -n 2`
 gpus_str=`echo $GPUS`
 gpus_list_str=`echo ${gpus_str[*]// /,}`
 

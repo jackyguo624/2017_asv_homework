@@ -16,6 +16,8 @@ from os import listdir
 from os.path import isfile, join
 import scipy.io as sio
 import os
+import ResNet
+import VGG
 
 def normalize(x):
     return (x) / np.linalg.norm(x)
@@ -33,9 +35,15 @@ def extend_frame(feats, n_ext=5):
 
 def save_checkpoint(state,is_best, savedir):
     filename = os.path.join(savedir, 'checkpoint.th')
-    torch.save(state, filename)
+    # torch.save(state, filename)
     if is_best:
         torch.save(state['model'].state_dict(),os.path.join(savedir,'model_best.param'))
+        print('save the best model at {0} at epoch {1} with acc {2}'
+              .format(savedir, state['epoch'], state['acc']))
+        acc_name = os.path.join(savedir, 'acc')
+        with open(acc_name, 'w') as f:
+            f.write('acc: {}, loss{}  at epoch: {}'.
+                    format(state['acc'], state['loss'], state['epoch']))
 
 
 def norm_arr(a):
@@ -46,16 +54,12 @@ def norm_arr(a):
 
 def getDataloader(path, label, model, mode):
     feats, targets = (None, None)
-
-    if model == 'cnn':
+    print (model)
+    if 'cqcc' in model:
         feats, targets = zip(*[(norm_arr(sio.loadmat(join(path, f))['CQcc'][0:20, 0:200]),
                                 int(label[f])) for f in tqdm(listdir(path)) if f in label])
-    elif model == 'cnn_fbank':
-        feats, targets = zip(*[(norm_arr(mat.T[:, 0:200]), int(label[key]))
-                               for key, mat in tqdm(kaldi_io.read_mat_scp(path))
-                               if key in label])
 
-    elif model == 'cnn_mfcc':
+    elif 'mfcc' in model or 'fbank' in model or 'fft' in model:
         feats, targets = zip(*[(norm_arr(mat.T[:, 0:200]), int(label[key]))
                                for key, mat in tqdm(kaldi_io.read_mat_scp(path))
                                if key in label])
@@ -68,7 +72,7 @@ def getDataloader(path, label, model, mode):
     assert len(feats) == len(targets)
     dataset = TensorDataset(torch.from_numpy(feats).float(),
                                 torch.from_numpy(targets).long())
-    dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
     return dataloader, feats.shape[1]
 
 
@@ -98,9 +102,20 @@ def main():
                                           mode='train')
     cvloader, inputdim = getDataloader(args.cvdata, cvlabel,
                                        model=args.model, mode='dev')
-    
-    model = getattr(CNN, args.model)(inputdim, 2)
-    
+    if 'cnn' in args.model:
+        if 'fft' in args.model:
+            model = getattr(VGG, args.model)(inputdim, 2)
+        else:
+            model = getattr(CNN, args.model)(inputdim, 2)
+    elif 'res' in args.model:
+        model = getattr(ResNet, args.model)()
+
+    '''
+    best_model_path = os.path.join(args.output, "model_best.param")
+    if os.path.isfile(best_model_path):
+        model.load_state_dict(torch.load(best_model_path))
+        print ("Load model at {}".format(best_model_path))
+    '''
     if not args.nocuda:
         model.cuda()
 
@@ -150,6 +165,8 @@ def main():
     def on_start(state):
         state['best_acc'] = state[
             'best_acc'] if 'best_acc' in state else 0.5
+        state['best_loss'] = state[
+            'best_loss'] if 'best_loss' in state else 1e10
 
     def on_end_epoch(state):
         trainmessage='Train Epoch:{:>3d}: Time:{:=6.1f}s/{:=4.1f}m Loss: {:=.4f} LR: {:=3.1e}'.format(
@@ -168,21 +185,29 @@ def main():
             state['epoch'], acc, loss, res1.value()[0])
 
         print (evalmessage)
+        
         isbest = acc > state['best_acc']
-        state['best_acc'] = loss if isbest else state['best_acc']
+        state['best_acc'] = acc if isbest else state['best_acc']
+        '''isbest = loss < state['best_loss']
+        state['best_loss'] = loss if isbest else state['best_loss']'''
+
+        isbest = True
         save_checkpoint({
             'model': model,
-            'epoch': state['epoch']
+            'epoch': state['epoch'],
+            'acc': acc,
+            'loss': loss
         }, isbest, args.output
         )
 
-        sched.step(acc)
-
+        # sched.step(acc)
+        sched.step()
     engine = tnt.engine.Engine()
     criterion = torch.nn.CrossEntropyLoss()
     # optimizer = torch.optim.SGD(model.parameters(),lr=1e-2,nesterov=True, weight_decay=1e-6, momentum=0.9)
     optimizer = torch.optim.Adam(params=model.parameters(),lr=0.01)
-    sched = ReduceLROnPlateau(optimizer,mode="max",factor=0.5,patience=2)
+    # sched = ReduceLROnPlateau(optimizer,mode="max",factor=0.5,patience=2)
+    sched = MultiStepLR(optimizer, milestones=[5, 15, 25, 35, 45], gamma=0.5)
     #sched = MultiStepLR(optimizer, milestones=[3, 7], gamma=0.1)
     time_meter = tnt.meter.TimeMeter(False)
     meter_loss = tnt.meter.AverageValueMeter()
@@ -192,7 +217,7 @@ def main():
     engine.hooks['on_start_epoch'] = on_start_epoch
     engine.hooks['on_end_epoch'] = on_end_epoch
     engine.hooks['on_forward'] = on_forward
-    engine.train(lossfun, trainloader, maxepoch=100, optimizer=optimizer)
+    engine.train(lossfun, trainloader, maxepoch=50, optimizer=optimizer)
 
 
 if __name__ == '__main__':
